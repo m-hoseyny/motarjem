@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.asyncio import AsyncSession
 from .database import Base
 import secrets
 import string
@@ -35,7 +36,7 @@ class User(Base):
     file_translations = relationship("FileTranslation", back_populates="user")
 
     @staticmethod
-    def create_from_telegram(db: Session, telegram_user, password_hash_func=None):
+    async def create_from_telegram(db: AsyncSession, telegram_user, password_hash_func=None):
         """Create a new User from Telegram user data"""
         # Generate a temporary email if not available
         email = f"{telegram_user.username}@telegram.user" if telegram_user.username else f"user_{telegram_user.id}@telegram.user"
@@ -48,9 +49,8 @@ class User(Base):
             is_active=True
         )
         db.add(user)
-        db.flush()  # Get the user ID without committing
-        return user, None
-
+        await db.flush()  # Get the user ID without committing
+        return user
 
 class BotUser(Base):
     __tablename__ = "bot_users"
@@ -63,37 +63,37 @@ class BotUser(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
+    
     # Foreign key to User
     user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
-    # Relationship with User
     user = relationship("User", back_populates="bot_user")
 
     @staticmethod
-    def create_from_telegram(db: Session, telegram_user, password_hash_func=None, create_user=True):
+    async def create_from_telegram(db: AsyncSession, telegram_user, password_hash_func=None, create_user=True):
         """Create a new BotUser from Telegram user data, optionally creating a linked User"""
-        bot_user = None
-        user = None
-        password = None
-
-        if create_user:
-            # Create the User first
-            user, password = User.create_from_telegram(db, telegram_user, password_hash_func)
-
-        # Create the BotUser
         bot_user = BotUser(
             telegram_id=telegram_user.id,
             username=telegram_user.username,
             first_name=telegram_user.first_name,
             last_name=telegram_user.last_name,
-            is_active=True,
-            user_id=user.id if user else None
+            is_active=True
         )
+        
+        user = None
+        password = None
+        
+        if create_user:
+            user = await User.create_from_telegram(db, telegram_user, password_hash_func)
+            bot_user.user = user
+            
+            if password_hash_func:
+                password = generate_random_password()
+                user.hashed_password = password_hash_func(password)
+        
         db.add(bot_user)
-        db.flush()  # Get the bot_user ID without committing
-
+        await db.flush()
+        
         return bot_user, user, password
-
 
 class FileTranslation(Base):
     __tablename__ = "file_translations"
@@ -103,7 +103,7 @@ class FileTranslation(Base):
     output_file_id = Column(String, nullable=True)
     status = Column(Enum(FileStatus), default=FileStatus.INIT)
     total_lines = Column(Integer)
-    price_unit = Column(Integer)  # Price per line in Toman
+    price_unit = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Foreign key to User
@@ -111,21 +111,23 @@ class FileTranslation(Base):
     user = relationship("User", back_populates="file_translations")
 
     @staticmethod
-    def create_from_telegram(
-        db: Session,
-        user_id: int,
-        input_file_id: str,
-        total_lines: int,
-        price_unit: int = 200
-    ):
+    async def create_from_telegram(
+            db: AsyncSession,
+            user_id: int,
+            input_file_id: str,
+            total_lines: int,
+            price_unit: int = 200
+        ):
         """Create a new file translation record"""
         file_translation = FileTranslation(
-            input_file_id=input_file_id,
             user_id=user_id,
+            input_file_id=input_file_id,
             total_lines=total_lines,
             price_unit=price_unit,
             status=FileStatus.INIT
         )
+        
         db.add(file_translation)
-        db.flush()
+        await db.flush()
+        
         return file_translation
