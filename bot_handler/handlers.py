@@ -12,6 +12,7 @@ from io import BytesIO
 import logging
 import sys
 from datetime import datetime
+import asyncio
 
 API_KEY = "app-hXFNJRVr9Y6AjZXCRGdns3AN"
 API_ENDPOINT = "https://api.morshed.pish.run/v1/chat-messages"
@@ -231,17 +232,23 @@ def replace_lines_in_srt(original_lines: list[str], translations: list[tuple[int
         new_lines[line_num] = translation
     return new_lines
 
-async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE, file_translation: FileTranslation, db):
-    """Process the translation of an SRT file"""
-    user_id = update.effective_user.id
-    logger.info(f"Starting translation process for file {file_translation.id} (user: {user_id})")
+async def process_translation(bot, chat_id: int, progress_message_id: int, file_translation: FileTranslation, db):
+    """Process the translation of an SRT file in background"""
+    logger.info(f"Starting translation process for file {file_translation.id} in background")
     
     try:
-        # Get the file content from context
-        lines = context.user_data.get('file_lines', [])
+        # Download the file using input_file_id
+        logger.debug(f"Downloading file with ID: {file_translation.input_file_id}")
+        file = await bot.get_file(file_translation.input_file_id)
+        downloaded_file = await file.download_as_bytearray()
+        
+        # Convert bytes to string and split into lines
+        content = downloaded_file.decode('utf-8', errors='ignore')
+        lines = content.splitlines()
+        
         if not lines:
-            error_msg = "File content not found"
-            logger.error(f"Error for user {user_id}: {error_msg}")
+            error_msg = "File content is empty"
+            logger.error(f"Error for file {file_translation.id}: {error_msg}")
             raise Exception(error_msg)
 
         # Extract text lines that need translation
@@ -258,9 +265,11 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             # Update progress message
             progress = (i / len(text_lines)) * 100
-            logger.debug(f"Translation progress for file {file_translation.id}: {progress:.1f}%")
-            await update.callback_query.edit_message_text(
-                f"در حال ترجمه... {progress:.1f}% تکمیل شده"
+            logger.info(f"Translation progress for file {file_translation.id}: {progress:.1f}%")
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=progress_message_id,
+                text=f"در حال ترجمه... {progress:.1f}% تکمیل شده"
             )
             
             # Translate batch
@@ -281,12 +290,12 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Create file object to send
         bio = BytesIO(file_content.encode('utf-8'))
-        bio.name = "translated_" + update.callback_query.message.document.file_name
+        bio.name = f"translated_{file_translation.id}.srt"
         
         # Send file to telegram
-        logger.debug(f"Sending translated file to user {user_id}")
-        message = await context.bot.send_document(
-            chat_id=update.effective_chat.id,
+        logger.debug(f"Sending translated file to chat {chat_id}")
+        message = await bot.send_document(
+            chat_id=chat_id,
             document=bio
         )
         
@@ -297,16 +306,22 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
         db.commit()
         logger.info(f"Successfully completed translation for file {file_translation.id}")
         
-        await update.callback_query.edit_message_text(
-            f"✅ ترجمه با موفقیت انجام شد!\n"
-            f"هزینه نهایی: ${total_price:.4f}"
+        await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=progress_message_id,
+            text=f"✅ ترجمه با موفقیت انجام شد!\n"
+                 f"هزینه نهایی: ${total_price:.4f}"
         )
         
     except Exception as e:
         logger.error(f"Error in process_translation for file {file_translation.id}: {str(e)}", exc_info=True)
         file_translation.status = FileStatus.FAILED
         db.commit()
-        await update.callback_query.edit_message_text(f"❌ خطا در ترجمه: {str(e)}")
+        await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=progress_message_id,
+            text=f"❌ خطا در ترجمه: {str(e)}"
+        )
 
 @authenticate_user
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):
@@ -340,10 +355,29 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             
         elif action == "start_translation":
             logger.info(f"Starting translation process for file {file_translation_id}")
-            await process_translation(update, context, file_translation, db)
+            # Send initial progress message
+            progress_message = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="در حال شروع ترجمه..."
+            )
+            
+            # Update original message
+            await query.edit_message_text("✅ درخواست ترجمه ثبت شد.")
+            
+            # Start translation in background
+            asyncio.create_task(
+                process_translation(
+                    bot=context.bot,
+                    chat_id=update.effective_chat.id,
+                    progress_message_id=progress_message.message_id,
+                    file_translation=file_translation,
+                    db=db
+                )
+            )
 
     except Exception as e:
         logger.error(f"Error in button_callback_handler: {str(e)}", exc_info=True)
         await query.edit_message_text(f"❌ خطا در پردازش درخواست: {str(e)}")
     finally:
-        db.close()
+        if action != "start_translation":  # Keep db session open for background task if starting translation
+            db.close()

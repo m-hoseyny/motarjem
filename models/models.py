@@ -10,7 +10,7 @@ class FileStatus(enum.Enum):
     INIT = "init"
     PROCESSING = "processing"
     FAILED = "failed"
-    PROCESSED = "processed"
+    COMPLETED = "completed"
 
 def generate_random_password(length=12):
     alphabet = string.ascii_letters + string.digits + string.punctuation
