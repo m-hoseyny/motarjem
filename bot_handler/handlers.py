@@ -280,7 +280,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 message = await context.bot.send_document(
                     chat_id=update.effective_chat.id,
                     document=output,
-                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nTهزینه کلی: ${translator.calculate_cost_toman(file.price_unit):.4f}"
+                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nTهزینه کلی: {translator.calculate_cost_toman(file.price_unit)} تومان"
                 )
                 
                 # Update file status and details
@@ -334,8 +334,18 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
                     context.user_data.pop('file_lines', None)
                     context.user_data.pop('translatable_lines', None)
                     
+                if file_translation.status == FileStatus.COMPLETED:
+                    await query.edit_message_text("❌ درخواست ترجمه قبلا انجام شده.")
+                    message = await context.bot.send_document(
+                        chat_id=update.effective_chat.id,
+                        document=file_translation.output_file_id,
+                        caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file_translation.total_lines}\nTهزینه کلی: {file_translation.total_lines * file_translation.price_unit} تومان"
+                    )
+                    return
+                    
                 elif action == "start_translation":
                     logger.info(f"Starting translation process for file {file_translation_id}")
+                    await query.message.delete()
                     # Start translation in background
                     asyncio.create_task(
                         process_translation(
