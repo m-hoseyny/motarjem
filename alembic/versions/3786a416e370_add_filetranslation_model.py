@@ -26,7 +26,7 @@ def upgrade() -> None:
     sa.Column('output_file_id', sa.String(), nullable=True),
     sa.Column('status', sa.Enum('INIT', 'FAILED', 'PROCESSING', 'COMPLETED', name='filestatus'), nullable=True),
     sa.Column('total_lines', sa.Integer(), nullable=True),
-    sa.Column('price_unit', sa.Integer(), nullable=True),
+    sa.Column('price_unit', sa.Double(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),

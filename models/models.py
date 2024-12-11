@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, Double
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,7 +107,7 @@ class FileTranslation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     file_name = Column(String, nullable=True)
     total_token_used = Column(Integer, nullable=True)
-    total_cost = Column(Integer, nullable=True)  # Store cost in Dollar
+    total_cost = Column(Double, nullable=True)  # Store cost in Dollar
     
     # Foreign key to User
     user_id = Column(Integer, ForeignKey("users.id"))

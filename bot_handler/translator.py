@@ -16,6 +16,7 @@ class SubtitleTranslator:
         self.delimiter = '[DELIMITER]'
         self.total_price = 0
         self.total_lines = 0
+        self.total_tokens = 0
         
     def calculate_cost_toman(self, unit_price):
         """Calculate cost in Toman"""
@@ -74,6 +75,7 @@ class SubtitleTranslator:
                     # Update total price
                     if "metadata" in data and "usage" in data["metadata"]:
                         self.total_price += float(data["metadata"]["usage"]["total_price"])
+                        self.total_tokens += int(data["metadata"]["usage"]["total_tokens"])
                         logger.debug(f"Batch translation completed. Total cost so far: ${self.total_price:.4f}")
                     
                     return translations

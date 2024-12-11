@@ -11,9 +11,10 @@ import aiohttp
 import json
 import asyncio
 from .translator import SubtitleTranslator
+from io import BytesIO
 
-API_KEY = "sk-KAzOhlJGVuYYd4cldtHw-Q"  # Move this to environment variables
-API_ENDPOINT = "https://api.morshed.pish.run/v1/chat-messages"
+API_KEY = "app-hXFNJRVr9Y6AjZXCRGdns3AN"  # Move this to environment variables
+API_ENDPOINT = "https://api.morshed.pish.run/v1"
 BATCH_SIZE = 10
 
 # Configure logging
@@ -50,6 +51,13 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_
     logger.info(f"Start command received from user {update.effective_user.id}")
     await update.message.reply_text(
         f"سلام {update.effective_user.first_name}! به ربات خوش آمدید."
+        f"\n"
+        f"در این ربات شما میتوانید با ارسال فایل srt فایل ترجمه آن را به فارسی دریافت کنید"
+        f"\n"
+        f"کافی است که فایل srt را برای بات ارسال کنید."
+        f"\n"
+        f"هزینه هر خط ترجمه در این بات ۲۰۰ تومن در نظر گرفته شده است. قبل از شروع ترجمه شما تخمین هزینه را میبینید"
+        
     )
 
 @authenticate_user
@@ -215,90 +223,85 @@ def replace_lines_in_srt(original_lines: list[str], translations: list[tuple[int
         new_lines[line_num] = translation
     return new_lines
 
-async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE, progress_message: Message=None):
-    """Process the translation of a subtitle file"""
+async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id: int):
     try:
-        # Get file_id from callback data
-        query = update.callback_query
-        action, file_id = query.data.split(':')
-        file_id = int(file_id)
-        
-        # Create async session
         async with async_session() as session:
-            async with session.begin():
-                # Get file from database
-                file = await session.get(FileTranslation, file_id)
-                if not file:
-                    await progress_message.edit_text("Error: File not found 😕")
-                    return
+            file = await session.get(FileTranslation, file_id)
+            if not file:
+                logger.error(f"File {file_id} not found")
+                return
+            
+            # Get the file from Telegram
+            tg_file = await context.bot.get_file(file.input_file_id)
+            file_content = await tg_file.download_as_bytearray()
+            file_content = file_content.decode('utf-8')
+            
+            # Send initial progress message
+            progress_message = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔄 شروع ترجمه...",
+            )
+            
+            try:
+                translator = SubtitleTranslator(API_KEY,
+                                                base_url=API_ENDPOINT)
+                logger.info(f'Going to translate file {file.id} for user {file.user_id}')
+                # Parse SRT content
+                subtitles = await translator.parse_srt_content(file_content)
                 
-                # Read file content
-                new_file = await context.bot.get_file(file.input_file_id)
-                downloaded_file = await new_file.download_as_bytearray()
+                # Update status to PROCESSING
+                file.status = FileStatus.PROCESSING
+                await session.commit()
                 
-                # Convert bytes to string
-                file_content = downloaded_file.decode('utf-8', errors='ignore')
+                # Progress callback
+                async def progress_callback(progress):
+                    try:
+                        await progress_message.edit_text(
+                            f"🔄 در حال ترجمه کردن:\n"
+                            f"[{'■' * int(progress / 10)}{'□' * (10 - int(progress / 10))}] "
+                            f"{progress:.1f}%"
+                        )
+                    except Exception as e:
+                        logger.error(f"Error updating progress: {str(e)}")
                 
-                # Initialize translator with the new endpoint
-                translator = SubtitleTranslator(
-                    api_key="app-hXFNJRVr9Y6AjZXCRGdns3AN",
-                    base_url="https://api.morshed.pish.run/v1"
+                # Translate content
+                translated_content = await translator.translate_all_subtitles(
+                    subtitles, 
+                    progress_callback=progress_callback
                 )
                 
-                try:
-                    logger.info(f'Going to translate file {file.id} for user {file.user_id}')
-                    # Parse SRT content
-                    subtitles = await translator.parse_srt_content(file_content)
-                    file.status = FileStatus.PROCESSING
-                    await session.commit()
-                    # Progress callback
-                    async def progress_callback(progress):
-                        try:
-                            await progress_message.edit_text(f"Translation in progress: {int(progress)}% complete... ⏳")
-                        except Exception as e:
-                            logger.error(f"Progress callback error: {str(e)}")
-                    
-                    # Translate subtitles
-                    logger.info(f'Translating subtitles for file {file.id}')
-                    translated_subtitles = await translator.translate_all_subtitles(
-                        subtitles,
-                        progress_callback=progress_callback
-                    )
-                    
-                    # Compose translated SRT
-                    logger.info(f'Composing translated content for file {file.id}')
-                    translated_content = translator.compose_srt(translated_subtitles)
-                    
-                    # Calculate total cost
-                    total_cost = translator.calculate_cost_toman(file.price_unit)
-                    
-                    # Send the translated file
-                    logger.info(f'Sending translated file {file.id}')
-                    send_file = await context.bot.send_document(
-                        chat_id=query.message.chat_id,
-                        document=translated_content.encode('utf-8'),
-                        filename=f"{file.file_name.replace('.srt', '')}_translated.srt",
-                        caption=f"✅ Translation completed!\nCost: {total_cost:,.0f} Toman"
-                    )
-                    
-                    # Update file translation record
-                    file.status = FileStatus.COMPLETED
-                    file.output_file_id = send_file.document.file_id
-                    file.total_token_used = translator.total_lines
-                    file.total_cost = total_cost
-                    await session.commit()
-                    
-                    await progress_message.edit_text("✅ Translation completed!")
-                    
-                except Exception as e:
-                    logger.error(f"Translation error: {str(e)}")
-                    await progress_message.edit_text(f"❌ Translation failed: {str(e)}")
-                    raise
-                    
+                translated_content = translator.compose_srt(translated_content)
+                 
+                # Create output file
+                output = BytesIO(translated_content.encode('utf-8'))
+                output.name = f"translated_{file.file_name}" if file.file_name else "translated_subtitle.srt"
+                
+                # Send the translated file
+                message = await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=output,
+                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nTهزینه کلی: ${translator.calculate_cost_toman(file.price_unit):.4f}"
+                )
+                
+                # Update file status and details
+                file.status = FileStatus.COMPLETED
+                file.output_file_id = message.document.file_id
+                file.total_token_used = translator.total_tokens
+                file.total_cost = translator.total_price  # Store in cents
+                await session.commit()
+                
+                await progress_message.delete()
+                
+            except Exception as e:
+                logger.error(f"Translation error: {str(e)}")
+                file.status = FileStatus.FAILED
+                await session.commit()
+                await progress_message.edit_text(f"❌ خطای داخلی: {str(e)}")
+                raise e
+                
     except Exception as e:
-        raise e
         logger.error(f"Process translation error: {str(e)}")
-        await progress_message.edit_text(f"❌ Translation failed: {str(e)}")
+        await progress_message.edit_text(f"❌ خطا!: {str(e)}")
 
 @authenticate_user
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):
@@ -333,21 +336,12 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
                     
                 elif action == "start_translation":
                     logger.info(f"Starting translation process for file {file_translation_id}")
-                    # Send initial progress message
-                    progress_message = await context.bot.send_message(
-                        chat_id=update.effective_chat.id,
-                        text="در حال شروع ترجمه..."
-                    )
-                    
-                    # Update original message
-                    # await query.edit_message_text("✅ درخواست ترجمه ثبت شد.")
-                    
                     # Start translation in background
                     asyncio.create_task(
                         process_translation(
                             update=update,
                             context=context,
-                            progress_message=progress_message
+                            file_id=file_translation_id
                         )
                     )
 
