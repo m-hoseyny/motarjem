@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:M0hammad@db:6024/gemsubtitle
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - API_KEY=${API_KEY}
+      - API_ENDPOINT=${API_ENDPOINT}
+      - LOCAL_DB=True
+    restart: always

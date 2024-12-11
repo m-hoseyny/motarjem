@@ -55,7 +55,5 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-alembic.ini
-migrations/
 instance/
 *.srt

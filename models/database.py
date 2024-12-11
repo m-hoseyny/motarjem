@@ -11,7 +11,7 @@ load_dotenv()
 LOCAL_DB = os.getenv("LOCAL_DB", "true").lower() == "true"
 # Use sqlite+aiosqlite:// instead of sqlite:// for async support
 DATABASE_URL = os.getenv("SQLITE_URL", "sqlite+aiosqlite:///./sql_app.db") if LOCAL_DB else os.getenv("DATABASE_URL")
-
+print(DATABASE_URL)
 if LOCAL_DB and not DATABASE_URL.startswith("sqlite+aiosqlite://"):
     DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://")
 
