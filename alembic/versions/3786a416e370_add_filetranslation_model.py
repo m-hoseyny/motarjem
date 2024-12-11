@@ -24,7 +24,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('input_file_id', sa.String(), nullable=True),
     sa.Column('output_file_id', sa.String(), nullable=True),
-    sa.Column('status', sa.Enum('INIT', 'FAILED', 'PROCESSED', name='filestatus'), nullable=True),
+    sa.Column('status', sa.Enum('INIT', 'FAILED', 'PROCESSING', 'COMPLETED', name='filestatus'), nullable=True),
     sa.Column('total_lines', sa.Integer(), nullable=True),
     sa.Column('price_unit', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),

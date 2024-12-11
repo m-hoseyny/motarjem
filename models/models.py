@@ -105,6 +105,9 @@ class FileTranslation(Base):
     total_lines = Column(Integer)
     price_unit = Column(Integer)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    file_name = Column(String, nullable=True)
+    total_token_used = Column(Integer, nullable=True)
+    total_cost = Column(Integer, nullable=True)  # Store cost in Dollar
     
     # Foreign key to User
     user_id = Column(Integer, ForeignKey("users.id"))
@@ -116,7 +119,8 @@ class FileTranslation(Base):
             user_id: int,
             input_file_id: str,
             total_lines: int,
-            price_unit: int = 200
+            price_unit: int = 200,
+            file_name: str = None
         ):
         """Create a new file translation record"""
         file_translation = FileTranslation(
@@ -124,7 +128,8 @@ class FileTranslation(Base):
             input_file_id=input_file_id,
             total_lines=total_lines,
             price_unit=price_unit,
-            status=FileStatus.INIT
+            status=FileStatus.INIT,
+            file_name=file_name
         )
         
         db.add(file_translation)

@@ -75,49 +75,36 @@ def count_translatable_lines(lines):
     translatable_lines = 0
     for line in lines:
         line = line.strip()
-        if line and not line.isdigit() and not '-->' in line:
+        if '-->' in line:
             translatable_lines += 1
     return translatable_lines
 
 @authenticate_user
 async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):
-    """Handler for processing .srt files
-        This function is going to translate the srt file to persian
-        This is going to use a async function to translate with external API
-        The price of each line is 200 Toman.
-        First, in this function we have to show the user the estimated price.
-    """
-    logger.info(f"Received file from user {update.effective_user.id}")
-    
-    # Check if a file was sent
-    if not update.message.document:
-        logger.warning(f"No document received from user {update.effective_user.id}")
-        await update.message.reply_text("لطفاً یک فایل زیرنویس (.srt) ارسال کنید.")
-        return
-
-    # Check if it's an .srt file
-    file = update.message.document
-    if not file.file_name.lower().endswith('.srt'):
-        logger.warning(f"Invalid file type received from user {update.effective_user.id}: {file.file_name}")
-        await update.message.reply_text("لطفاً فقط فایل‌های زیرنویس (.srt) ارسال کنید.")
-        return
-
+    """Handle uploaded SRT files"""
     try:
-        logger.debug(f"Processing file {file.file_name} for user {update.effective_user.id}")
-        # Download the file
+        file = update.message.document
+        if not file.file_name.lower().endswith('.srt'):
+            await update.message.reply_text("❌ فایل باید با پسوند .srt باشد")
+            return
+
+        # Download and process the file
         new_file = await context.bot.get_file(file.file_id)
         downloaded_file = await new_file.download_as_bytearray()
         
         # Convert bytes to string and split into lines
         content = downloaded_file.decode('utf-8', errors='ignore')
-        lines = content.splitlines()
+        lines = content.split('\n')
         
-        # Count lines that need translation
+        # Count translatable lines
         translatable_lines = count_translatable_lines(lines)
-        logger.info(f"File {file.file_name} has {translatable_lines} translatable lines")
+        if translatable_lines == 0:
+            await update.message.reply_text("❌ هیچ متن قابل ترجمه‌ای در فایل یافت نشد")
+            return
         
-        # Calculate price (200 Toman per line)
-        price_toman = translatable_lines * 200
+        # Calculate estimated price (200 Toman per line)
+        price_unit = 200  # Toman per line
+        price_toman = translatable_lines * price_unit
         price_thousand_toman = price_toman / 1000
 
         # Store file information in database
@@ -128,15 +115,10 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
                         db=session,
                         user_id=bot_user.user_id,
                         input_file_id=file.file_id,
-                        total_lines=translatable_lines
+                        total_lines=translatable_lines,
+                        price_unit=price_unit,
+                        file_name=file.file_name
                     )
-                    await session.commit()
-                    logger.debug(f"Created FileTranslation record with ID {file_translation.id}")
-                    
-                    # Store the file information for later use
-                    context.user_data['current_file_id'] = file.file_id
-                    context.user_data['file_lines'] = lines
-                    context.user_data['translatable_lines'] = translatable_lines
                     
                     # Create inline keyboard
                     keyboard = [
@@ -153,12 +135,14 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
                         f"آیا مایل به شروع ترجمه هستید؟",
                         reply_markup=reply_markup
                     )
-            finally:
-                pass
-                
+            except Exception as e:
+                logger.error(f"Error creating file translation: {str(e)}")
+                await update.message.reply_text("❌ خطا در ذخیره‌سازی فایل")
+                raise
+
     except Exception as e:
         logger.error(f"Error processing file for user {update.effective_user.id}: {str(e)}", exc_info=True)
-        await update.message.reply_text(f"خطا در پردازش فایل: {str(e)}")
+        await update.message.reply_text(f"❌ خطا در پردازش فایل: {str(e)}")
 
 async def translate_batch(lines: list[str]) -> list[str]:
     """Translate a batch of subtitle lines"""
@@ -237,10 +221,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Get file_id from callback data
         query = update.callback_query
         action, file_id = query.data.split(':')
-        file_id = int(file_id)  # Convert to integer after splitting
-        
-        # Update message to show translation started
-        # await query.edit_text("Translation started... ⏳")
+        file_id = int(file_id)
         
         # Create async session
         async with async_session() as session:
@@ -248,14 +229,14 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 # Get file from database
                 file = await session.get(FileTranslation, file_id)
                 if not file:
-                    await waiting_message.edit_text("Error: File not found 😕")
+                    await progress_message.edit_text("Error: File not found 😕")
                     return
                 
                 # Read file content
                 new_file = await context.bot.get_file(file.input_file_id)
                 downloaded_file = await new_file.download_as_bytearray()
                 
-                # Convert bytes to string and split into lines
+                # Convert bytes to string
                 file_content = downloaded_file.decode('utf-8', errors='ignore')
                 
                 # Initialize translator with the new endpoint
@@ -265,10 +246,11 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
                 
                 try:
-                    logger.info(f'Going to translate file content {file.id} ->> {file.user_id}')
+                    logger.info(f'Going to translate file {file.id} for user {file.user_id}')
                     # Parse SRT content
                     subtitles = await translator.parse_srt_content(file_content)
-                    
+                    file.status = FileStatus.PROCESSING
+                    await session.commit()
                     # Progress callback
                     async def progress_callback(progress):
                         try:
@@ -277,28 +259,33 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                             logger.error(f"Progress callback error: {str(e)}")
                     
                     # Translate subtitles
-                    logger.info(f'Going to translate subtitles {file.id} ->> {file.user_id}')
+                    logger.info(f'Translating subtitles for file {file.id}')
                     translated_subtitles = await translator.translate_all_subtitles(
                         subtitles,
                         progress_callback=progress_callback
                     )
                     
                     # Compose translated SRT
-                    logger.info(f'Compress {file.id} ->> {file.user_id}')
+                    logger.info(f'Composing translated content for file {file.id}')
                     translated_content = translator.compose_srt(translated_subtitles)
                     
-                    # Create translation record
-                    logger.info(f'Going to save the file {file.id} ->> {file.user_id}')
+                    # Calculate total cost
+                    total_cost = translator.calculate_cost_toman(file.price_unit)
                     
                     # Send the translated file
+                    logger.info(f'Sending translated file {file.id}')
                     send_file = await context.bot.send_document(
                         chat_id=query.message.chat_id,
                         document=translated_content.encode('utf-8'),
-                        filename=f"{file.id}_translated.srt",
-                        caption=f"✅ Translation completed!\nCost: {translator.calculate_cost_toman(200):,.0f} Toman"
+                        filename=f"{file.file_name.replace('.srt', '')}_translated.srt",
+                        caption=f"✅ Translation completed!\nCost: {total_cost:,.0f} Toman"
                     )
+                    
+                    # Update file translation record
                     file.status = FileStatus.COMPLETED
                     file.output_file_id = send_file.document.file_id
+                    file.total_token_used = translator.total_lines
+                    file.total_cost = total_cost
                     await session.commit()
                     
                     await progress_message.edit_text("✅ Translation completed!")
@@ -311,8 +298,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         raise e
         logger.error(f"Process translation error: {str(e)}")
-        # if progress_message:
-        #     await progress_message.edit_text("❌ An error occurred during translation")
+        await progress_message.edit_text(f"❌ Translation failed: {str(e)}")
 
 @authenticate_user
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):

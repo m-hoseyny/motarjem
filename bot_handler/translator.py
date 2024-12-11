@@ -69,14 +69,14 @@ class SubtitleTranslator:
                     
                     # Get translations
                     translations = data["answer"].split(f"{self.delimiter}")
-                    translations = [t.strip() for t in translations]
+                    translations = [t.strip().replace('<output>', '').replace('</output>', '') for t in translations]
                     
                     # Update total price
                     if "metadata" in data and "usage" in data["metadata"]:
                         self.total_price += float(data["metadata"]["usage"]["total_price"])
                         logger.debug(f"Batch translation completed. Total cost so far: ${self.total_price:.4f}")
                     
-                    return translations.replace('<output>', '').replace('</output>', '')
+                    return translations
 
         except Exception as e:
             logger.error(f"Error in translation batch: {str(e)}")
