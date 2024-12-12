@@ -12,6 +12,7 @@ import json
 import asyncio
 from .translator import SubtitleTranslator
 from io import BytesIO
+import time
 
 API_KEY = "app-hXFNJRVr9Y6AjZXCRGdns3AN"  # Move this to environment variables
 API_ENDPOINT = "https://api.morshed.pish.run/v1"
@@ -223,9 +224,11 @@ def replace_lines_in_srt(original_lines: list[str], translations: list[tuple[int
         new_lines[line_num] = translation
     return new_lines
 
+
 async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id: int):
     try:
         async with async_session() as session:
+            start_time = time.time()
             file = await session.get(FileTranslation, file_id)
             if not file:
                 logger.error(f"File {file_id} not found")
@@ -256,10 +259,23 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 # Progress callback
                 async def progress_callback(progress):
                     try:
+                        if progress > 0:
+                            elapsed_time = time.time() - start_time
+                            total_estimated_time = elapsed_time * (100 / progress)
+                            remaining_time = total_estimated_time - elapsed_time
+                            
+                            # Format remaining time
+                            remaining_minutes = int(remaining_time // 60)
+                            remaining_seconds = int(remaining_time % 60)
+                            eta_text = f"\nزمان تقریبی باقی مانده: {remaining_minutes}:{remaining_seconds:02d}"
+                        else:
+                            eta_text = "\nدر حال محاسبه زمان باقی مانده..."
+
                         await progress_message.edit_text(
                             f"🔄 در حال ترجمه کردن:\n"
                             f"[{'■' * int(progress / 10)}{'□' * (10 - int(progress / 10))}] "
                             f"{progress:.1f}%"
+                            f"{eta_text}"
                         )
                     except Exception as e:
                         logger.error(f"Error updating progress: {str(e)}")
@@ -274,13 +290,17 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                  
                 # Create output file
                 output = BytesIO(translated_content.encode('utf-8'))
-                output.name = f"translated_{file.file_name}" if file.file_name else "translated_subtitle.srt"
+                output.name = f"translated_{file.file_name}" if file.file_name else f"translated_subtitle_{file.id}.srt"
                 
                 # Send the translated file
+                total_time = time.time() - start_time
+                total_minutes = int(total_time // 60)
+                total_seconds = int(total_time % 60)
+                
                 message = await context.bot.send_document(
                     chat_id=update.effective_chat.id,
                     document=output,
-                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nTهزینه کلی: {translator.calculate_cost_toman(file.price_unit)} تومان"
+                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nزمان کل: {total_minutes}:{total_seconds:02d}\nهزینه کلی: {translator.calculate_cost_toman(file.price_unit)} تومان"
                 )
                 
                 # Update file status and details
