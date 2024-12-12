@@ -1,14 +1,20 @@
-version: '3.8'
 
 services:
-  web:
+  motarjem-bot:
     build: .
-    ports:
-      - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:M0hammad@db:6024/gemsubtitle
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - API_KEY=${API_KEY}
-      - API_ENDPOINT=${API_ENDPOINT}
-      - LOCAL_DB=True
+      - DATABASE_URL=postgresql+asyncpg://postgres:huKPNs3ZH8g590k@postgres:5432/motarjem
+      - TELEGRAM_TOKEN=7866756005:AAEGxVkMvQ5Z7oOrqmkIrbSlblDJnBeqCIk
+      - WEBHOOK_URL=https://motarjem.papkorn.app
     restart: always
+    networks:
+      - alltogether
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.motarjem-bot.rule=Host(`motarjem.papkorn.app`)"
+      - "traefik.http.routers.motarjem-bot.entrypoints=websecure"
+      - "traefik.http.routers.motarjem-bot.tls.certresolver=myresolver"
+
+networks:
+  alltogether:
+    external: true

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from models.database import get_db
 from models.models import User
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from bot_handler import setup_handlers
 
 # Load environment variables
@@ -41,7 +42,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 @app.post("/webhook")
-async def webhook(request: Request, db: Session = Depends(get_db)):
+async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """Handle incoming webhook requests from Telegram"""
     data = await request.json()
     update = Update.de_json(data=data, bot=application.bot)

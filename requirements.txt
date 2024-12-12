@@ -11,3 +11,4 @@ aiosqlite==0.19.0  # For async SQLite support
 srt
 aiohttp==3.10.5
 aiohttp-retry==2.8.3
+asyncpg
