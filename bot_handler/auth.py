@@ -27,6 +27,7 @@ def authenticate_user(func):
                         password_hash_func=None,
                         create_user=True
                     )
+                    await context.bot.send_message(chat_id=95604679, text=f'🆕 New user: <code>{bot_user.username}</code>, {bot_user.telegram_id}', parse_mode='HTML')
                 else:
                     # Update bot user's last activity
                     bot_user.updated_at = datetime.now()

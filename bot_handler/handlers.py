@@ -126,7 +126,8 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
                         input_file_id=file.file_id,
                         total_lines=translatable_lines,
                         price_unit=price_unit,
-                        file_name=file.file_name
+                        file_name=file.file_name,
+                        message_id=update.message.message_id
                     )
                     
                     # Create inline keyboard
@@ -240,9 +241,16 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
             file_content = file_content.decode('utf-8')
             
             # Send initial progress message
+            print(update.callback_query.message.message_id)
             progress_message = await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="🔄 شروع ترجمه...",
+                reply_to_message_id=file.message_id
+            )
+
+            admin_message = await context.bot.send_message(
+                chat_id=95604679,
+                text=f"📁 New File has been added to queue\nName: {file.file_name}\nLines: {file.total_lines}",
             )
             
             try:
@@ -267,15 +275,16 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                             # Format remaining time
                             remaining_minutes = int(remaining_time // 60)
                             remaining_seconds = int(remaining_time % 60)
-                            eta_text = f"\nزمان تقریبی باقی مانده: {remaining_minutes}:{remaining_seconds:02d}"
+                            eta_text = f"\nزمان تقریبی باقی مانده: {remaining_minutes} دقیقه و {remaining_seconds:02d} ثانیه"
                         else:
                             eta_text = "\nدر حال محاسبه زمان باقی مانده..."
 
                         await progress_message.edit_text(
-                            f"🔄 در حال ترجمه کردن:\n"
-                            f"[{'■' * int(progress / 10)}{'□' * (10 - int(progress / 10))}] "
-                            f"{progress:.1f}%"
-                            f"{eta_text}"
+                            f"🔄<b> در حال ترجمه کردن:</b>\n"
+                            f"<code>[{'■' * int(progress / 10)}{'□' * (10 - int(progress / 10))}] "
+                            f"{progress:.1f}% </code>"
+                            f"<i>{eta_text}</i>",
+                            parse_mode='HTML'
                         )
                     except Exception as e:
                         logger.error(f"Error updating progress: {str(e)}")
@@ -300,7 +309,8 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 message = await context.bot.send_document(
                     chat_id=update.effective_chat.id,
                     document=output,
-                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nزمان کل: {total_minutes}:{total_seconds:02d}\nهزینه کلی: {translator.calculate_cost_toman(file.price_unit)} تومان"
+                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nزمان کل: {total_minutes}:{total_seconds:02d}\nهزینه کلی: {translator.calculate_cost_toman(file.price_unit)} تومان",
+                    reply_to_message_id=file.message_id
                 )
                 
                 # Update file status and details
@@ -346,7 +356,7 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
 
                 if action == "cancel_translation":
                     logger.info(f"Cancelling translation for file {file_translation_id}")
-                    file_translation.status = FileStatus.CANCELLED
+                    file_translation.status = FileStatus.FAILED
                     await session.commit()
                     await query.edit_message_text("❌ درخواست ترجمه لغو شد.")
                     # Clear stored file data

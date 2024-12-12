@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, Double
+from sqlalchemy import BigInteger, Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, Double
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,6 +108,7 @@ class FileTranslation(Base):
     file_name = Column(String, nullable=True)
     total_token_used = Column(Integer, nullable=True)
     total_cost = Column(Double, nullable=True)  # Store cost in Dollar
+    message_id = Column(BigInteger, nullable=True)
     
     # Foreign key to User
     user_id = Column(Integer, ForeignKey("users.id"))
@@ -120,7 +121,8 @@ class FileTranslation(Base):
             input_file_id: str,
             total_lines: int,
             price_unit: int = 200,
-            file_name: str = None
+            file_name: str = None,
+            message_id: int = None
         ):
         """Create a new file translation record"""
         file_translation = FileTranslation(
@@ -129,7 +131,8 @@ class FileTranslation(Base):
             total_lines=total_lines,
             price_unit=price_unit,
             status=FileStatus.INIT,
-            file_name=file_name
+            file_name=file_name,
+            message_id=message_id
         )
         
         db.add(file_translation)
