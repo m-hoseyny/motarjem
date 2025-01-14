@@ -1,9 +1,9 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import ContextTypes
-from models.models import BotUser, User, FileTranslation, FileStatus
+from models.models import BotUser, User, FileTranslation, FileStatus, Transaction, get_user_balance
 from .auth import authenticate_user
-from sqlalchemy import func
+from sqlalchemy import func, select
 from models.database import async_session
 from sqlalchemy.ext.asyncio import AsyncSession
 import os, sys, re
@@ -16,6 +16,7 @@ import time
 
 API_KEY = "app-hXFNJRVr9Y6AjZXCRGdns3AN"  # Move this to environment variables
 API_ENDPOINT = "https://api.morshed.pish.run/v1"
+WEBHOOK_URL=os.getenv("WEBHOOK_URL")
 BATCH_SIZE = 10
 
 # Configure logging
@@ -115,6 +116,12 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
         price_unit = 200  # Toman per line
         price_toman = translatable_lines * price_unit
         price_thousand_toman = price_toman / 1000
+        
+        # Check if the user has enough balance
+        user_balance_toman = await get_user_balance(bot_user.user_id)
+        if user_balance_toman < price_toman:
+            await update.message.reply_text("❌ موجودی شما کافی نیست")
+            return
 
         # Store file information in database
         async with async_session() as session:
@@ -388,3 +395,42 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
         except Exception as e:
             logger.error(f"Error in button_callback_handler: {str(e)}", exc_info=True)
             await query.edit_message_text(f"❌ خطا در پردازش درخواست: {str(e)}")
+
+@authenticate_user
+async def balance_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):
+    """Handler for /balance command - shows user's current balance"""
+    try:
+        # Get incoming transactions sum
+
+
+        # Calculate balance and convert to Toman
+        balance_tomans = await get_user_balance(bot_user.user_id)
+        
+        # Create payment URLs with correct source parameter
+        base_url = WEBHOOK_URL.rstrip('/')  # Remove trailing slash if present
+        keyboard = [
+            [InlineKeyboardButton(
+                "اعبتار ۱۰۰ هزار تومان", 
+                url=f"{base_url}/finance/{bot_user.user_id}/100000?source=telegram"
+            )],
+            [InlineKeyboardButton(
+                "اعتبار ۵۰۰ هزار تومان", 
+                url=f"{base_url}/finance/{bot_user.user_id}/500000?source=telegram"
+            )],
+            [InlineKeyboardButton(
+                "اعتبار ۱ میلیون تومان", 
+                url=f"{base_url}/finance/{bot_user.user_id}/1000000?source=telegram"
+            )],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"💰 میزان شارژ شما {balance_tomans:,.0f} تومان\n\n"
+            f"برای افزایش شارژ یکی از گزینه های زیر را انتخاب کنید:"
+            f"‍\n\n"
+            f"هر ۱۰۰ هزار تومان، ۵۰۰ خط به شما اعتبار میدهد",
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.error(f"Error in balance handler: {str(e)}")
+        await update.message.reply_text("Sorry, there was an error getting your balance. Please try again later.")

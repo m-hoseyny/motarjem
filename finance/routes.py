@@ -4,14 +4,20 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.database import get_db
-from models.models import User, Receipt, PaymentStatus, Transaction, ReceiptTransaction
+from models.models import User, Receipt, PaymentStatus, Transaction, ReceiptTransaction, BotUser
 from .zibal import create_pay_url_zibal, verify_pay
 import logging
+from telegram import Bot
+from telegram.constants import ParseMode
 import uuid
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize bot
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+bot = Bot(token=TELEGRAM_TOKEN)
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -19,6 +25,7 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 async def create_payment(
     user_id: int,
     amount: float,
+    source: str = None,
     db: AsyncSession = Depends(get_db)
 ):
     """Create a payment receipt and redirect to payment gateway"""
@@ -41,6 +48,11 @@ async def create_payment(
         status=PaymentStatus.INIT,
         number=str(uuid.uuid4())  # Generate a unique number for the receipt
     )
+
+    # If source is telegram, store it in extra_data
+    if source == "telegram":
+        receipt.extra_data = {"source": "telegram"}
+    
     db.add(receipt)
     await db.flush()  # Get the receipt ID
     
@@ -69,18 +81,18 @@ async def confirm_payment(
             return {"status": "failed", "message": "Missing required parameters"}
 
         # Get receipt by tracker_id
-        print(track_id)
         result = await db.execute(
             select(Receipt).filter(Receipt.tracker_id == track_id)
         )
         receipt = result.scalar_one_or_none()
-        print(receipt)
+        
         if not receipt or receipt.status != PaymentStatus.PENDING:
             logger.error(f'Invalid receipt state: {receipt}')
             return {"status": "failed", "message": "Invalid receipt"}
 
         # Update receipt with callback data
-        receipt.update_extra_data({
+        current_extra_data = receipt.extra_data or {}
+        current_extra_data.update({
             'zibal_get_request': {
                 'tracker_id': track_id,
                 'success': success,
@@ -88,6 +100,7 @@ async def confirm_payment(
                 'order_id': order_id
             }
         })
+        receipt.extra_data = current_extra_data
 
         # Check payment status
         if status != '2' or success != '1':
@@ -119,6 +132,26 @@ async def confirm_payment(
             transaction_id=transaction.id
         )
         db.add(receipt_transaction)
+        
+        # If payment was from telegram, send notification
+        if receipt.extra_data and receipt.extra_data.get('source') == 'telegram':
+            try:
+                # Get user's telegram ID from BotUser
+                bot_user_result = await db.execute(
+                    select(BotUser).filter(BotUser.user_id == receipt.user_id)
+                )
+                bot_user = bot_user_result.scalar_one_or_none()
+                
+                if bot_user:
+                    amount_tomans = receipt.amount / 10
+                    await bot.send_message(
+                        chat_id=bot_user.telegram_id,
+                        text=f"✅ پرداخت شما با موفقیت انجام شد!\n"
+                             f"💰 مبلغ: {amount_tomans:,.0f} تومان\n",
+                        parse_mode=ParseMode.HTML
+                    )
+            except Exception as e:
+                logger.error(f"Error sending Telegram notification: {str(e)}")
         
         await db.commit()
         return {"status": "success", "message": "Payment successful"}

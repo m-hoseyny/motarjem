@@ -1,11 +1,19 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from .handlers import start_handler, message_handler, stats_handler, srt_file_handler, button_callback_handler
+from .handlers import (
+    start_handler, 
+    message_handler, 
+    stats_handler, 
+    srt_file_handler, 
+    button_callback_handler,
+    balance_handler
+)
 
 def setup_handlers(application: Application) -> None:
     """Register all bot handlers"""
     # Add command handlers
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("stats", stats_handler))
+    application.add_handler(CommandHandler("balance", balance_handler))
     
     # Add file handler for .srt files
     application.add_handler(MessageHandler(

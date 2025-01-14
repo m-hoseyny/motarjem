@@ -1,6 +1,6 @@
 from sqlalchemy import BigInteger, Column, Integer, String, DateTime, ForeignKey, Boolean, Enum, Double
 from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, select
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.asyncio import AsyncSession
 from .database import Base
@@ -65,12 +65,23 @@ class User(Base):
         await db.flush()  # Get the user ID without committing
         return user
 
-    # @property
-    # async def balance(self):
-    #     """Calculate user's balance based on incoming and outgoing transactions"""
-    #     incoming_sum = sum(t.amount for t in self.incoming_transactions) if self.incoming_transactions else 0
-    #     outgoing_sum = sum(t.amount for t in self.outgoing_transactions) if self.outgoing_transactions else 0
-    #     return incoming_sum - outgoing_sum
+    async def get_balance(self, db: AsyncSession) -> float:
+        """Calculate user's balance based on incoming and outgoing transactions"""
+        # Get incoming transactions
+        incoming_result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(Transaction.to_user_id == self.id)
+        )
+        incoming_sum = incoming_result.scalar_one()
+
+        # Get outgoing transactions
+        outgoing_result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(Transaction.from_user_id == self.id)
+        )
+        outgoing_sum = outgoing_result.scalar_one()
+
+        return incoming_sum - outgoing_sum
 
 class BotUser(Base):
     __tablename__ = "bot_users"
@@ -245,3 +256,24 @@ class ReceiptTransaction(Base):
     
     receipt_id = Column(Integer, ForeignKey("receipts.id"), primary_key=True)
     transaction_id = Column(Integer, ForeignKey("transactions.id"), primary_key=True)
+
+
+
+from models.database import async_session
+
+async def get_user_balance(user_id: int) -> float:
+    async with async_session() as db:
+        incoming_result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(Transaction.to_user_id == user_id)
+        )
+        incoming_sum = incoming_result.scalar()
+
+        # Get outgoing transactions sum
+        outgoing_result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount), 0))
+            .filter(Transaction.from_user_id == user_id)
+        )
+        outgoing_sum = outgoing_result.scalar()
+        balance = incoming_sum - outgoing_sum
+        return balance / 10
