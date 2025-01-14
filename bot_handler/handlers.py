@@ -53,13 +53,17 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_
     """Handler for /start command"""
     logger.info(f"Start command received from user {update.effective_user.id}")
     await update.message.reply_text(
-        f"سلام {update.effective_user.first_name}! به ربات خوش آمدید."
+        f"👋 سلام {update.effective_user.first_name}! به ربات خوش آمدید."
         f"\n"
         f"در این ربات شما میتوانید با ارسال فایل srt فایل ترجمه آن را به فارسی دریافت کنید"
         f"\n"
         f"کافی است که فایل srt را برای بات ارسال کنید."
         f"\n"
         f"هزینه هر خط ترجمه در این بات ۲۰۰ تومن در نظر گرفته شده است. قبل از شروع ترجمه شما تخمین هزینه را میبینید"
+        f"\n"
+        f"برای دریافت موجودی، دستور زیر را بزنید"
+        f"\n"
+        f"/balance"
         
     )
 

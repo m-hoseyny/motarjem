@@ -9,6 +9,7 @@ import string
 import enum
 from sqlalchemy.types import TypeDecorator, String
 import json
+import uuid
 
 class FileStatus(enum.Enum):
     INIT = "init"
@@ -277,3 +278,33 @@ async def get_user_balance(user_id: int) -> float:
         outgoing_sum = outgoing_result.scalar()
         balance = incoming_sum - outgoing_sum
         return balance / 10
+
+async def init_user_charge(user_id: int, amount_toman: int, db) -> None:
+    """Initialize user's account with given amount in Tomans"""
+    # Convert Tomans to Rials
+    amount_rial = amount_toman * 10
+    
+    # Create initial charge transaction
+    initial_charge = Transaction(
+        to_user_id=user_id,
+        amount=amount_rial,
+        description=f"Initial welcome bonus: {amount_toman:,} Tomans"
+    )
+    db.add(initial_charge)
+    await db.flush()
+    
+    # Create welcome invoice
+    welcome_invoice = Invoice(
+        user_id=user_id,
+        number=str(uuid.uuid4()),
+        description="Welcome bonus credit"
+    )
+    db.add(welcome_invoice)
+    await db.flush()
+    
+    # Link transaction to invoice
+    invoice_transaction = InvoiceTransaction(
+        invoice_id=welcome_invoice.id,
+        transaction_id=initial_charge.id
+    )
+    db.add(invoice_transaction)
