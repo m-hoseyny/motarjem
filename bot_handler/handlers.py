@@ -71,7 +71,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):
     """Handler for regular messages"""
     logger.info(f"Message received from user {update.effective_user.id}: {update.message.text}")
-    await update.message.reply_text(update.message.text)
+    await update.message.reply_text('متن قابل فهم نیست! لطفا فایل srt را بفرستید')
 
 @authenticate_user
 async def stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_user: BotUser = None):
