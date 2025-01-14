@@ -22,7 +22,11 @@ def create_pay_url_zibal(receipt, logger):
     if request_to_zibal.get('message') != 'success':
         raise Exception('Zibal request is not successful')
     
-    receipt.extra_data = {'request_to_zibal': request_to_zibal}
+    # Update receipt extra data instead of assigning
+    current_extra_data = receipt.extra_data or {}
+    current_extra_data.update({'request_to_zibal': request_to_zibal})
+    receipt.extra_data = current_extra_data
+    
     receipt.tracker_id = str(request_to_zibal.get('trackId'))
     receipt.status = models.PaymentStatus.PENDING
     redirect_url = START_PAYMENT_URL + str(request_to_zibal.get('trackId'))

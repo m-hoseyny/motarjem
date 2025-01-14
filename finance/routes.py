@@ -25,42 +25,47 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 async def create_payment(
     user_id: int,
     amount: float,
-    source: str = None,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """Create a payment receipt and redirect to payment gateway"""
-    # Get user
-    result = await db.execute(select(User).filter(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Convert amount to Rials (multiply by 10)
-    amount_rials = float(amount * 10)
-    logger.info(f'Requested amount for user {user_id} is {amount_rials}')
-    
-    # Create receipt
-    receipt = Receipt(
-        user_id=user_id,
-        amount=amount_rials,
-        description=f'Charge account {amount} Tomans',
-        bank='zibal',
-        status=PaymentStatus.INIT,
-        number=str(uuid.uuid4())  # Generate a unique number for the receipt
-    )
-
-    # If source is telegram, store it in extra_data
-    if source == "telegram":
-        receipt.extra_data = {"source": "telegram"}
-    
-    db.add(receipt)
-    await db.flush()  # Get the receipt ID
-    
-    # Generate payment URL
-    redirect_url = create_pay_url_zibal(receipt=receipt, logger=logger)
-    
-    await db.commit()
-    return RedirectResponse(url=redirect_url)
+    try:
+        # Get source from query parameters
+        source = request.query_params.get('source', None)
+        logger.info(f"Creating payment for user {user_id} with amount {amount} and source {source}")
+        # Get user
+        result = await db.execute(select(User).filter(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Convert amount to Rials (multiply by 10)
+        amount_rials = float(amount * 10)
+        logger.info(f'Requested amount for user {user_id} is {amount_rials}')
+        
+        # Create receipt
+        receipt = Receipt(
+            user_id=user_id,
+            amount=amount_rials,
+            description=f'Charge account {amount} Tomans',
+            bank='zibal',
+            status=PaymentStatus.INIT,
+            number=str(uuid.uuid4()),  # Generate a unique number for the receipt
+            extra_data={'source': source}
+        )
+        
+        db.add(receipt)
+        await db.flush()  # Get the receipt ID
+        
+        # Generate payment URL
+        redirect_url = create_pay_url_zibal(receipt=receipt, logger=logger)
+        
+        await db.commit()
+        return RedirectResponse(url=redirect_url)
+        
+    except Exception as e:
+        logger.error(f"Error creating payment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/confirm_pay")
 async def confirm_payment(
@@ -132,7 +137,7 @@ async def confirm_payment(
             transaction_id=transaction.id
         )
         db.add(receipt_transaction)
-        
+        logger.info(f"Payment confirmed for user {receipt.user_id}, extra data: {receipt.extra_data}")
         # If payment was from telegram, send notification
         if receipt.extra_data and receipt.extra_data.get('source') == 'telegram':
             try:
@@ -154,7 +159,14 @@ async def confirm_payment(
                 logger.error(f"Error sending Telegram notification: {str(e)}")
         
         await db.commit()
-        return {"status": "success", "message": "Payment successful"}
+
+        # Get MAIN_BOT from environment
+        main_bot = os.getenv('MAIN_BOT', '')
+        if receipt.extra_data and receipt.extra_data.get('source') == 'telegram':
+            # Redirect to Telegram bot
+            return RedirectResponse(url=f"https://t.me/{main_bot}")
+        else:
+            return {"status": "success", "message": "Payment was successful"}
 
     except Exception as e:
         logger.error(f"Error confirming payment: {str(e)}")
