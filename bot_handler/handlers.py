@@ -1,7 +1,7 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import ContextTypes
-from models.models import BotUser, User, FileTranslation, FileStatus, Transaction, get_user_balance
+from models.models import BotUser, User, FileTranslation, FileStatus, Transaction, get_user_balance, Invoice, InvoiceTransaction
 from .auth import authenticate_user
 from sqlalchemy import func, select
 from models.database import async_session
@@ -13,6 +13,7 @@ import asyncio
 from .translator import SubtitleTranslator
 from io import BytesIO
 import time
+import uuid
 
 API_KEY = "app-hXFNJRVr9Y6AjZXCRGdns3AN"  # Move this to environment variables
 API_ENDPOINT = "https://api.morshed.pish.run/v1"
@@ -303,7 +304,36 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 )
                 
                 translated_content = translator.compose_srt(translated_content)
-                 
+                
+                # Calculate total cost in Tomans
+                total_cost_toman = translator.calculate_cost_toman(file.price_unit)
+                total_cost_rial = total_cost_toman * 10  # Convert to Rials
+                
+                # Create transaction to deduct balance
+                transaction = Transaction(
+                    from_user_id=file.user_id,
+                    amount=total_cost_rial,
+                    description=f"Translation cost for {file.file_name} - {file.total_lines} lines"
+                )
+                session.add(transaction)
+                await session.flush()
+                
+                # Create invoice
+                invoice = Invoice(
+                    user_id=file.user_id,
+                    number=str(uuid.uuid4()),
+                    description=f"Translation of {file.file_name}"
+                )
+                session.add(invoice)
+                await session.flush()
+                
+                # Link transaction to invoice
+                invoice_transaction = InvoiceTransaction(
+                    invoice_id=invoice.id,
+                    transaction_id=transaction.id
+                )
+                session.add(invoice_transaction)
+                
                 # Create output file
                 output = BytesIO(translated_content.encode('utf-8'))
                 output.name = f"translated_{file.file_name}" if file.file_name else f"translated_subtitle_{file.id}.srt"
@@ -316,7 +346,10 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 message = await context.bot.send_document(
                     chat_id=update.effective_chat.id,
                     document=output,
-                    caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file.total_lines}\nزمان کل: {total_minutes}:{total_seconds:02d}\nهزینه کلی: {translator.calculate_cost_toman(file.price_unit)} تومان",
+                    caption=f"✅ ترجمه شما کامل شد!\n"
+                            f"📝 تعداد کل خطوط: {file.total_lines}\n"
+                            f"⏱ زمان کل: {total_minutes}:{total_seconds:02d}\n"
+                            f"💰 هزینه کلی: {total_cost_toman:,} تومان",
                     reply_to_message_id=file.message_id
                 )
                 
@@ -376,7 +409,9 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
                     message = await context.bot.send_document(
                         chat_id=update.effective_chat.id,
                         document=file_translation.output_file_id,
-                        caption=f"✅ ترجمه شما کامل شد!\nتعداد کل خطوط: {file_translation.total_lines}\nTهزینه کلی: {file_translation.total_lines * file_translation.price_unit} تومان"
+                        caption=f"✅ ترجمه شما کامل شد!\n"
+                                f"📝 تعداد کل خطوط: {file_translation.total_lines}\n"
+                                f"💰 هزینه کلی: {file_translation.total_lines * file_translation.price_unit} تومان"
                     )
                     return
                     
