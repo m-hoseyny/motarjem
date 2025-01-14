@@ -9,6 +9,7 @@ from models.models import User
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot_handler import setup_handlers
+from finance.routes import router as finance_router
 
 # Load environment variables
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
@@ -40,6 +41,9 @@ async def lifespan(app: FastAPI):
 
 # FastAPI app
 app = FastAPI(lifespan=lifespan)
+
+# Include routers
+app.include_router(finance_router)
 
 @app.post("/webhook")
 async def webhook(request: Request, db: AsyncSession = Depends(get_db)):
