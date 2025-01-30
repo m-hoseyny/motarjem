@@ -37,9 +37,9 @@ def authenticate_user(func):
                     await session.flush()
                     
                     # Initialize user with 5000 Tomans
-                    await init_user_charge(user.id, 100_000, session)
+                    await init_user_charge(user.id, 50_000, session)
                     await context.bot.send_message(chat_id=95604679, text=f'🆕 New user: <code>{bot_user.username}</code>, {bot_user.telegram_id}', parse_mode='HTML')
-                    await context.bot.send_message(chat_id=telegram_id, text=f'مبلغ ۱۰۰ هزار تومان برای شما به عنوان هدیه شارژ شد', parse_mode='HTML')
+                    await context.bot.send_message(chat_id=telegram_id, text=f'مبلغ ۵۰ هزار تومان برای شما به عنوان هدیه شارژ شد', parse_mode='HTML')
                     await session.commit()
                 
                 return await func(update, context, bot_user=bot_user, *args, **kwargs)
