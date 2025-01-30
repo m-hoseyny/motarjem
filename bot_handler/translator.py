@@ -8,6 +8,38 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
+def count_words_in_srt(srt_content):
+    """
+    Count the number of words in an SRT file using the srt library.
+
+    Args:
+        srt_content (str): srt content
+
+    Returns:
+        int: Number of words in the SRT file
+    """
+    try:
+        
+       
+        # Parse the SRT content
+        subtitles = list(srt.parse(srt_content))
+        
+        # Combine all subtitle content and count words
+        all_text = ' '.join(subtitle.content for subtitle in subtitles)
+        words = re.findall(r'\w+', all_text)
+        return len(words)
+        
+    except FileNotFoundError:
+        print(f"Error: File '{srt_file_path}' not found.")
+        return -1
+    except srt.SRTParseError:
+        print(f"Error: Invalid SRT file format in '{srt_file_path}'")
+        return -1
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return -1
+
 class SubtitleTranslator:
     def __init__(self, api_key, batch_size=10, base_url='https://api.morshed.pish.run/v1'):
         self.api_key = api_key
@@ -16,11 +48,12 @@ class SubtitleTranslator:
         self.delimiter = '[DELIMITER]'
         self.total_price = 0
         self.total_lines = 0
+        self.total_words = 0
         self.total_tokens = 0
         
     def calculate_cost_toman(self, unit_price):
         """Calculate cost in Toman"""
-        return self.total_lines * unit_price
+        return self.total_words * unit_price
 
     async def parse_srt_content(self, content):
         """Parse SRT content from string"""
@@ -48,8 +81,8 @@ class SubtitleTranslator:
                 "query": query,
                 "response_mode": "blocking",
                 "conversation_id": "",
-                "user": "abc-123",
-                "files": [{}]
+                "user": "MotarjemAI",
+                "files": []
             }
             
             async with aiohttp.ClientSession() as session:
@@ -115,6 +148,7 @@ class SubtitleTranslator:
                 
                 batch_texts = []
                 batches_subs = []
+        self.total_words = count_words_in_srt(self.compose_srt(translated_subtitles))
         self.total_lines = len(translated_subtitles)
         return translated_subtitles
 

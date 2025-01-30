@@ -10,7 +10,7 @@ import os, sys, re
 import aiohttp
 import json
 import asyncio
-from .translator import SubtitleTranslator
+from .translator import SubtitleTranslator, count_words_in_srt
 from io import BytesIO
 import time
 import uuid
@@ -59,7 +59,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bot_
         f"\n"
         f"کافی است که فایل srt را برای بات ارسال کنید."
         f"\n"
-        f"هزینه هر خط ترجمه در این بات ۲۰۰ تومن در نظر گرفته شده است. قبل از شروع ترجمه شما تخمین هزینه را میبینید"
+        f"هزینه هر هر کلمه خروجی در این بات ۱۵ تک تومن در نظر گرفته شده است. قبل از شروع ترجمه شما تخمین هزینه را میبینید"
         f"\n"
         f"برای دریافت موجودی، دستور زیر را بزنید"
         f"\n"
@@ -113,13 +113,16 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
         
         # Count translatable lines
         translatable_lines = count_translatable_lines(lines)
+        words_count = count_words_in_srt(content)
         if translatable_lines == 0:
             await update.message.reply_text("❌ هیچ متن قابل ترجمه‌ای در فایل یافت نشد")
             return
         
         # Calculate estimated price (200 Toman per line)
-        price_unit = 200  # Toman per line
-        price_toman = translatable_lines * price_unit
+        # price_unit = 200  # Toman per line
+        # price_toman = translatable_lines * price_unit
+        price_unit = 15  # Toman per word
+        price_toman = words_count * price_unit
         price_thousand_toman = price_toman / 1000
         
         # Check if the user has enough balance
@@ -351,7 +354,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                     chat_id=update.effective_chat.id,
                     document=output,
                     caption=f"✅ ترجمه شما کامل شد!\n"
-                            f"📝 تعداد کل خطوط: {file.total_lines}\n"
+                            f"📝 تعداد کل کلمات: {file.total_lines}\n"
                             f"⏱ زمان کل: {total_minutes}:{total_seconds:02d}\n"
                             f"💰 هزینه کلی: {total_cost_toman:,} تومان",
                     reply_to_message_id=file.message_id
@@ -362,6 +365,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 file.output_file_id = message.document.file_id
                 file.total_token_used = translator.total_tokens
                 file.total_cost = translator.total_price  # Store in cents
+                logger.info(f'Total price in toman: {translator.total_price * 90000}')
                 await session.commit()
                 
                 await progress_message.delete()

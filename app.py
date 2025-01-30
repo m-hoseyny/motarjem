@@ -21,6 +21,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 MAIN_BOT = os.getenv("MAIN_BOT")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 print(os.getenv("TELEGRAM_TOKEN"))
+print(os.getenv("WEBHOOK_URL"))
 # Telegram bot application
 application = Application.builder().token(TELEGRAM_TOKEN).build()
 
