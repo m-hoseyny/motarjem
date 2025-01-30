@@ -471,7 +471,7 @@ async def balance_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, bo
             f"💰 میزان شارژ شما {balance_tomans:,.0f} تومان\n\n"
             f"برای افزایش شارژ یکی از گزینه های زیر را انتخاب کنید:"
             f"‍\n\n"
-            f"هر ۱۰۰ هزار تومان، ۵۰۰ خط به شما اعتبار میدهد",
+            f"هر ۱۰۰ هزار تومان، ۶۶۶۶ کلمه به شما اعتبار میدهد",
             reply_markup=reply_markup
         )
     except Exception as e:
