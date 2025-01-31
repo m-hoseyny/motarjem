@@ -128,7 +128,11 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
         # Check if the user has enough balance
         user_balance_toman = await get_user_balance(bot_user.user_id)
         if user_balance_toman < price_toman:
-            await update.message.reply_text("❌ موجودی شما کافی نیست")
+            await update.message.reply_text(
+                f"❌ موجودی شما کافی نیست\n"
+                f"هزینه زیرنویس {price_toman} تومان میشود ولی شارژ شما {user_balance_toman} است."
+                f"\nلطفا اکانت خود را شارژ کنید\n/balance"
+                )
             return
 
         # Store file information in database
