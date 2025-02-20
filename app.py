@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot_handler import setup_handlers
 from finance.routes import router as finance_router
+from logger_config import setup_logging
 
 # Load environment variables
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
@@ -27,6 +28,9 @@ application = Application.builder().token(TELEGRAM_TOKEN).build()
 
 # Setup bot handlers
 setup_handlers(application)
+
+# Setup logging with Telegram handler
+setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

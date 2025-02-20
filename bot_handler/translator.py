@@ -5,6 +5,9 @@ import datetime
 import srt
 import logging
 import json
+from logger_config import setup_logging
+
+setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +34,13 @@ def count_words_in_srt(srt_content):
         return len(words)
         
     except FileNotFoundError:
-        print(f"Error: File '{srt_file_path}' not found.")
+        logger.error(f"Error: File '{srt_file_path}' not found.")
         return -1
     except srt.SRTParseError:
-        print(f"Error: Invalid SRT file format in '{srt_file_path}'")
+        logger.error(f"Error: Invalid SRT file format in '{srt_file_path}'")
         return -1
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.error(f"Error: {str(e)}")
         return -1
 
 class SubtitleTranslator:
@@ -63,7 +66,7 @@ class SubtitleTranslator:
             logger.error(f"Error parsing SRT content: {str(e)}")
             raise
 
-    async def translate_batch(self, texts):
+    async def translate_batch(self, texts, retries=3):
         """Translate a batch of subtitle texts"""
         try:
             logger.debug(f"Translating batch of {len(texts)} subtitles")
@@ -114,8 +117,10 @@ class SubtitleTranslator:
                     return translations
 
         except Exception as e:
-            logger.error(f"Error in translation batch: {str(e)}")
-            return ["" for _ in texts]
+            logger.error(f"Error in translation batch: {str(e)}, retries={retries}")
+            if retries == 0:
+                return ["" for _ in texts]
+            return await self.translate_batch(texts, retries=retries - 1)
 
     async def translate_all_subtitles(self, subtitles, progress_callback=None):
         """Translate all subtitles with progress updates"""

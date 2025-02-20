@@ -21,25 +21,9 @@ WEBHOOK_URL=os.getenv("WEBHOOK_URL")
 BATCH_SIZE = 10
 
 # Configure logging
+from logger_config import setup_logging
+setup_logging()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-# Create handlers
-console_handler = logging.StreamHandler(sys.stdout)
-file_handler = logging.FileHandler('bot.log')
-
-# Set levels
-console_handler.setLevel(logging.INFO)
-file_handler.setLevel(logging.DEBUG)
-
-# Create formatters and add it to handlers
-log_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(log_format)
-file_handler.setFormatter(log_format)
-
-# Add handlers to the logger
-logger.addHandler(console_handler)
-logger.addHandler(file_handler)
 
 CLEANER = re.compile('<.*?>') 
 
@@ -172,51 +156,6 @@ async def srt_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, b
     except Exception as e:
         logger.error(f"Error processing file for user {update.effective_user.id}: {str(e)}", exc_info=True)
         await update.message.reply_text(f"❌ خطا در پردازش فایل: {str(e)}")
-
-async def translate_batch(lines: list[str]) -> list[str]:
-    """Translate a batch of subtitle lines"""
-    logger.debug(f"Translating batch of {len(lines)} lines")
-    # Join lines with delimiter
-    text = "[DELIMITER]".join(lines)
-    
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "inputs": {},
-        "query": text,
-        "response_mode": "blocking",
-        "conversation_id": "",
-        "user": "abc-123",
-        "files": [{}]
-    }
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            logger.debug("Sending request to translation API")
-            async with session.post(API_ENDPOINT, headers=headers, json=payload) as response:
-                if response.status != 200:
-                    error_msg = f"API request failed with status {response.status}"
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
-                
-                data = await response.json()
-                if "answer" not in data:
-                    error_msg = "Invalid API response"
-                    logger.error(error_msg)
-                    raise Exception(error_msg)
-                
-                # Split the translated text back into lines
-                translated_lines = data["answer"].split("[DELIMITER]")
-                total_price = float(data["metadata"]["usage"]["total_price"])
-                
-                logger.debug(f"Successfully translated batch. Price: ${total_price}")
-                return translated_lines, total_price
-    except Exception as e:
-        logger.error(f"Error in translate_batch: {str(e)}", exc_info=True)
-        raise
 
 def extract_text_from_srt(lines: list[str]) -> list[tuple[int, str]]:
     """Extract text lines from SRT content, returning (line_number, text) pairs"""
