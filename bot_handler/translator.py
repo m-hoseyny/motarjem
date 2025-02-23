@@ -44,7 +44,7 @@ def count_words_in_srt(srt_content):
         return -1
 
 class SubtitleTranslator:
-    def __init__(self, api_key, batch_size=10, base_url='https://api.morshed.pish.run/v1'):
+    def __init__(self, api_key, batch_size=10, base_url='https://cloud.dify.ai/v1'):
         self.api_key = api_key
         self.base_url = base_url
         self.batch_size = batch_size

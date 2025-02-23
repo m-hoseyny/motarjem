@@ -6,17 +6,15 @@ from .auth import authenticate_user
 from sqlalchemy import func, select
 from models.database import async_session
 from sqlalchemy.ext.asyncio import AsyncSession
-import os, sys, re
-import aiohttp
-import json
+import os, re
 import asyncio
 from .translator import SubtitleTranslator, count_words_in_srt
 from io import BytesIO
 import time
 import uuid
 
-API_KEY = "app-hXFNJRVr9Y6AjZXCRGdns3AN"  # Move this to environment variables
-API_ENDPOINT = "https://api.morshed.pish.run/v1"
+API_KEY = os.getenv("DIFY_API_KEY", "app-12345677")
+API_ENDPOINT = os.getenv("DIFY_API_ENDPOINT", "https://cloud.dify.ai/v1")
 WEBHOOK_URL=os.getenv("WEBHOOK_URL")
 BATCH_SIZE = 10
 
