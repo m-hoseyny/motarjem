@@ -24,7 +24,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-logger.info(f'API_KEY: {API_KEY}, API_ENDPOINT: {API_ENDPOINT}')
+print(f'API_KEY: {API_KEY}, API_ENDPOINT: {API_ENDPOINT}')
 CLEANER = re.compile('<.*?>') 
 
 def clean_html(raw_html):
