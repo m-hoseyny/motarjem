@@ -36,8 +36,8 @@ def count_words_in_srt(srt_content):
     except FileNotFoundError:
         logger.error(f"Error: File '{srt_file_path}' not found.")
         return -1
-    except srt.SRTParseError:
-        logger.error(f"Error: Invalid SRT file format in '{srt_file_path}'")
+    except srt.SRTParseError as e:
+        logger.error(f"Error: Invalid SRT file format in '{srt_file_path}' {e}")
         return -1
     except Exception as e:
         logger.error(f"Error: {str(e)}")
