@@ -31,6 +31,7 @@ def setup_logging():
     # Create a logger for this module
     logger = logging.getLogger(__name__)
     logger.info("Logging system initialized with Telegram handler")
+    return logger
 
 
 
