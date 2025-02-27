@@ -284,7 +284,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 session.add(invoice_transaction)
                 
                 # Create output file
-                output = BytesIO(translated_content.encode('utf-8'))
+                output = BytesIO(translated_content.encode('utf-8-sig'))
                 output.name = f"translated_{file.file_name}" if file.file_name else f"translated_subtitle_{file.id}.srt"
                 
                 # Send the translated file

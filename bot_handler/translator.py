@@ -135,9 +135,10 @@ class SubtitleTranslator:
                 translations = await self.translate_batch(batch_texts)
                 
                 for parent_sub, translation in zip(batches_subs, translations):
+                    content = "\u202b" + translation.strip() + "\u202c"
                     translated_sub = srt.Subtitle(
                         index=parent_sub.index,
-                        content=translation.strip(),
+                        content=content,
                         start=parent_sub.start,
                         end=parent_sub.end
                     )
@@ -154,7 +155,7 @@ class SubtitleTranslator:
         self.total_words = count_words_in_srt(self.compose_srt(translated_subtitles))
         self.total_lines = len(translated_subtitles)
         if len(translated_subtitles) != len(subtitles):
-            logger.error(f"Number of translated subtitles does not match number of original subtitles")
+            logger.error(f"Number of translated subtitles does not match number of original subtitles\nTranslated length: {len(translated_subtitles)}, subtitle length: {len(subtitles)}")
         return translated_subtitles
 
     def compose_srt(self, translated_subtitles):
