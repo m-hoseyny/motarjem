@@ -19,9 +19,8 @@ WEBHOOK_URL=os.getenv("WEBHOOK_URL")
 BATCH_SIZE = 10
 
 # Configure logging
-from logger_config import setup_logging
-setup_logging()
-logger = logging.getLogger(__name__)
+from logger_config import global_logger
+logger = global_logger
 
 
 print(f'API_KEY: {API_KEY}, API_ENDPOINT: {API_ENDPOINT}')

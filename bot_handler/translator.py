@@ -5,11 +5,9 @@ import datetime
 import srt
 import logging
 import json
-from logger_config import setup_logging
+from logger_config import global_logger
 
-setup_logging()
-
-logger = logging.getLogger(__name__)
+logger = global_logger
 
 
 def count_words_in_srt(srt_content):
