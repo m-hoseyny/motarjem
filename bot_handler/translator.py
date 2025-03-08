@@ -128,7 +128,7 @@ class SubtitleTranslator:
         total_batches = (len(subtitles) + self.batch_size - 1) // self.batch_size
         await progress_callback(0)
         for i, subtitle in enumerate(subtitles):
-            batch_texts.append(subtitle.content)
+            batch_texts.append(subtitle.content.replace('‫', ''))
             batches_subs.append(subtitle)
 
             if len(batch_texts) == self.batch_size or i == len(subtitles) - 1:
