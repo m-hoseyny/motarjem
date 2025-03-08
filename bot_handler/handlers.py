@@ -296,7 +296,8 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                     chat_id=update.effective_chat.id,
                     document=output,
                     caption=f"✅ ترجمه شما کامل شد!\n"
-                            f"📝 تعداد کل کلمات: {file.total_lines}\n"
+                            f"📝 تعداد کل خطوط ترجمه شده: {translator.total_lines}\n"
+                            f"📝 تعداد کل خطوط فایل اصلی: {file.total_lines}\n"
                             f"⏱ زمان کل: {total_minutes}:{total_seconds:02d}\n"
                             f"💰 هزینه کلی: {total_cost_toman:,} تومان",
                     reply_to_message_id=file.message_id
@@ -307,6 +308,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                 file.output_file_id = message.document.file_id
                 file.total_token_used = translator.total_tokens
                 file.total_cost = translator.total_price  # Store in cents
+                file.total_lines = translator.total_lines
                 logger.info(f'Total price in toman: {translator.total_price * 90000}')
                 await session.commit()
                 
