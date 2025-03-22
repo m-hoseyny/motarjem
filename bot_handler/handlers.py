@@ -299,8 +299,7 @@ async def process_translation(update: Update, context: ContextTypes.DEFAULT_TYPE
                             f"📝 تعداد کل خطوط ترجمه شده: {translator.total_lines}\n"
                             f"📝 تعداد کل خطوط فایل اصلی: {file.total_lines}\n"
                             f"⏱ زمان کل: {total_minutes}:{total_seconds:02d}\n"
-                            f"💰 هزینه کلی: {total_cost_toman:,} تومان"
-                            f"اسم فایل:‌ <code>{file.file_name}</code>",
+                            f"💰 هزینه کلی: {total_cost_toman:,} تومان\n",
                     reply_to_message_id=file.message_id,
                     parse_mode='HTML'
                 )
